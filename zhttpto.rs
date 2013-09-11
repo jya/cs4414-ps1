@@ -11,6 +11,7 @@ use extra::uv;
 use extra::{net_ip, net_tcp};
 use std::str;
 use std::io;
+use std::path;
 
 static BACKLOG: uint = 5;
 static PORT:    uint = 4414;
@@ -21,6 +22,8 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
 {
     do spawn {
         let accept_result = extra::net_tcp::accept(new_conn);
+	let mut file_contents: ~[~str] = ~[];
+	let mut file_result: ~str = ~"";
         match accept_result {
             Err(err) => {
                println(fmt!("Connection error: %?", err));
@@ -40,16 +43,23 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
 			for request_str.any_line_iter().advance() |line| {
 				if(line.starts_with("GET")) {
 					let loc = line.find_str("HTTP/1.1").get();
-					let file = line.slice(4, loc-1);
-					let path = Path(file);
-					let read_result: Result<@Reader, ~str>;
-					read_result = io::file_reader(~path);
-					if read_result.is_ok() {
-						let text = read_result.unwrap();
-						println(fmt!("%?", text.read_lines()));
+					let file = line.slice(5, loc-1).to_owned();
+					println(fmt!("%?", file));
+					println(file);
+					if(file.len() > 1){
+						file_contents = load_file(file);
 					}
 				}
 			}
+			
+			for file_contents.iter().advance() |line| {
+				println(line.to_str());
+				file_result = file_result + line.to_str();
+				file_result = file_result + " \
+							      ";
+			}
+			println(file_result);
+
                         println(fmt!("Request received:\n%s", request_str));
 			unsafe{ println(fmt!("Number of requests: %u", count)); }
                         let mut response: ~str = ~
@@ -63,7 +73,8 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
 			unsafe{
 			        response = response + fmt!("
 					   <h2>Number of requests: %u</h2>
-				 	   </body></html>\r\n", count); 
+					   <p>%s</p>
+				 	   </body></html>\r\n", count, file_result); 
 			}
                         net_tcp::write(&sock, response.as_bytes_with_null_consume());
                     },
@@ -71,6 +82,14 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
             }
         }
     };
+}
+
+fn load_file(pathname : ~str) -> ~[~str] {
+	let filereader : Result<@Reader, ~str> = io::file_reader(~path::Path(pathname));
+	match filereader { 
+		Ok(reader) => reader.read_lines(),
+		Err(msg) => fail!("Cannot open file: " + msg),
+	}
 }
 
 fn main() {
