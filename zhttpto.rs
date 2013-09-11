@@ -10,6 +10,7 @@ extern mod extra;
 use extra::uv;
 use extra::{net_ip, net_tcp};
 use std::str;
+use std::io;
 
 static BACKLOG: uint = 5;
 static PORT:    uint = 4414;
@@ -35,7 +36,20 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
                         println(fmt!("Receive error: %?", err));
                     },
                     Ok(bytes) => {
-                        let request_str = str::from_bytes(bytes.slice(0, bytes.len() - 1));
+			let request_str = str::from_bytes(bytes.slice(0, bytes.len() - 1));
+			for request_str.any_line_iter().advance() |line| {
+				if(line.starts_with("GET")) {
+					let loc = line.find_str("HTTP/1.1").get();
+					let file = line.slice(4, loc-1);
+					let path = Path(file);
+					let read_result: Result<@Reader, ~str>;
+					read_result = io::file_reader(~path);
+					if read_result.is_ok() {
+						let text = read_result.unwrap();
+						println(fmt!("%?", text.read_lines()));
+					}
+				}
+			}
                         println(fmt!("Request received:\n%s", request_str));
 			unsafe{ println(fmt!("Number of requests: %u", count)); }
                         let mut response: ~str = ~
@@ -47,13 +61,10 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
                              <body>
                              <h1>Greetings, Rusty!</h1>";
 			unsafe{
-			let test = fmt!("<h2>Number of requests: %u</h2></body></html>\r\n", count);
-			println(test);}
-			unsafe{ response = response + fmt!(
-					"<h2>Number of requests: %u</h2>
-					</body></html>\r\n", count); }
-			println(response);
-
+			        response = response + fmt!("
+					   <h2>Number of requests: %u</h2>
+				 	   </body></html>\r\n", count); 
+			}
                         net_tcp::write(&sock, response.as_bytes_with_null_consume());
                     },
                 };
