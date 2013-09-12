@@ -55,10 +55,8 @@ fn new_connection_callback(new_conn :net_tcp::TcpNewConnection, _killch: std::co
 			for file_contents.iter().advance() |line| {
 				println(line.to_str());
 				file_result = file_result + line.to_str();
-				file_result = file_result + " \
-							      ";
+				file_result.push_str("\n");
 			}
-			println(file_result);
 
                         println(fmt!("Request received:\n%s", request_str));
 			unsafe{ println(fmt!("Number of requests: %u", count)); }
